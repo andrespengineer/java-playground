@@ -1,82 +1,73 @@
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 
-
-class Main {
-    public static void main(String[] args) {
-
-        int n = 2;
-
-        ZeroEvenOdd zeroEvenOdd = new ZeroEvenOdd(n);
-
-        StringBuilder stringBuilder = new StringBuilder();
-
-        IntConsumer intConsumer = stringBuilder::append;
-
-        Thread A = new Thread(() -> {
-            try {
-                zeroEvenOdd.zero(intConsumer);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        });
-        Thread B = new Thread(() -> {
-            try {
-                zeroEvenOdd.even(intConsumer);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        });
-        Thread C = new Thread(() -> {
-            try {
-                zeroEvenOdd.odd(intConsumer);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
-
-        for(int i = 1; i <= n; i++){
-            A.run();
-            if(i % 2 == 0)
-                B.run();
-            else
-                C.run();
-        }
-
-        System.out.println(stringBuilder);
-
-    }
-}
 class ZeroEvenOdd {
 
-    private final ReentrantLock zeroLock = new ReentrantLock();
-    private int count = 1;
+    private final int n;
+    private final AtomicInteger atomicInteger = new AtomicInteger(1);
+    private final AtomicBoolean atomicBoolean = new AtomicBoolean(true);
 
     public ZeroEvenOdd(int n) {
-
+        this.n = n;
     }
 
     // printNumber.accept(x) outputs "x", where x is an integer.
-    public void zero(IntConsumer printNumber) throws InterruptedException {
-        printNumber.accept(0);
-        zeroLock.lock();
+    public synchronized void zero(IntConsumer printNumber) throws InterruptedException {
+
+        for(int i = 1; i <= n; i++)
+        {
+            while(!atomicBoolean.get())
+                wait();
+
+            printNumber.accept(0);
+
+            atomicBoolean.set(false);
+
+            notifyAll();
+        }
+
+
     }
 
     public synchronized void even(IntConsumer printNumber) throws InterruptedException {
-        if(count % 2 == 0)
-            printNumber.accept(count);
-        count++;
-        zeroLock.unlock();
+
+        for(int i = 1; i <= n; i++)
+        {
+
+            while((atomicInteger.get() % 2 != 0 || atomicBoolean.get()) && atomicInteger.get() <= n)
+                wait();
+
+            if(atomicInteger.get() > n){
+                notifyAll();
+                return;
+            }
+
+            atomicBoolean.set(true);
+
+            printNumber.accept(atomicInteger.getAndIncrement());
+
+            notifyAll();
+        }
     }
 
     public synchronized void odd(IntConsumer printNumber) throws InterruptedException {
 
-        if(count % 2 != 0)
-            printNumber.accept(count);
-        count++;
-        zeroLock.unlock();
+        for(int i = 1; i <= n; i++)
+        {
+            while((atomicInteger.get() % 2 == 0 || atomicBoolean.get()) && atomicInteger.get() <= n)
+                wait();
+
+            if(atomicInteger.get() > n){
+                notifyAll();
+                return;
+            }
+
+            atomicBoolean.set(true);
+
+            printNumber.accept(atomicInteger.getAndIncrement());
+
+            notifyAll();
+        }
     }
 }
